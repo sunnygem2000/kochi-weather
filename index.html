@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kochi Weather</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0b1720;color:#fff;font-family:Arial,Helvetica,sans-serif}
+body{display:flex;align-items:stretch;justify-content:center}
+#app{width:100%;height:100%;padding:34px 42px 28px;display:flex;flex-direction:column}
+.top{display:flex;justify-content:space-between;align-items:flex-start}
+.location{font-size:42px;font-weight:700;letter-spacing:.5px}
+.date{font-size:21px;opacity:.72;margin-top:6px}
+.updated{font-size:17px;opacity:.55;text-align:right;margin-top:5px}
+.main{display:flex;align-items:center;gap:46px;flex:1;min-height:0}
+.currentIcon{font-size:105px;line-height:1}
+.temp{font-size:116px;font-weight:300;line-height:.95}
+.unit{font-size:45px;vertical-align:top;margin-left:5px}
+.condition{font-size:31px;margin-top:10px}
+.feels{font-size:23px;opacity:.75;margin-top:7px}
+.hl{font-size:24px;margin-top:13px}
+.hl span{margin-right:24px}
+.hourly{display:grid;grid-template-columns:repeat(8,1fr);gap:12px;margin-top:8px}
+.card{background:rgba(255,255,255,.09);border-radius:18px;padding:14px 7px;text-align:center;min-width:0}
+.card .time{font-size:18px;opacity:.8}
+.card .ico{font-size:31px;margin:7px 0}
+.card .ct{font-size:27px;font-weight:700}
+.card .rain{font-size:16px;opacity:.7;margin-top:5px}
+.footer{display:flex;justify-content:space-between;align-items:center;margin-top:16px;font-size:15px;opacity:.48}
+#loading{font-size:26px;margin:auto}
+#tap{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:10}
+#tap div{background:#fff;color:#111;border-radius:18px;padding:24px 34px;text-align:center;font-size:27px;font-weight:700}
+#tap small{display:block;font-size:16px;font-weight:400;margin-top:8px;opacity:.7}
+.hidden{display:none!important}
+@media(max-width:900px){
+ #app{padding:22px}.location{font-size:30px}.date{font-size:17px}.main{gap:18px}.currentIcon{font-size:70px}.temp{font-size:80px}.condition{font-size:24px}.hourly{gap:6px}.card{padding:10px 3px}.card .time{font-size:14px}.card .ct{font-size:22px}
+}
+</style>
+</head>
+<body>
+<div id="tap"><div>Tap once to activate<br>the weather display<small>After this, leave the Echo Show alone.</small></div></div>
+<div id="app">
+  <div id="loading">Loading Kochi weather…</div>
+</div>
+
+<script>
+const LAT=9.939093, LON=76.270523;
+const API='https://api.open-meteo.com/v1/forecast';
+const codes={
+  0:['Clear','☀️'],1:['Mainly clear','🌤️'],2:['Partly cloudy','⛅'],3:['Overcast','☁️'],
+  45:['Fog','🌫️'],48:['Rime fog','🌫️'],51:['Light drizzle','🌦️'],53:['Drizzle','🌦️'],55:['Heavy drizzle','🌧️'],
+  56:['Freezing drizzle','🌧️'],57:['Freezing drizzle','🌧️'],61:['Light rain','🌦️'],63:['Rain','🌧️'],65:['Heavy rain','🌧️'],
+  66:['Freezing rain','🌧️'],67:['Freezing rain','🌧️'],71:['Snow','🌨️'],73:['Snow','🌨️'],75:['Heavy snow','❄️'],
+  77:['Snow grains','❄️'],80:['Rain showers','🌦️'],81:['Rain showers','🌧️'],82:['Heavy showers','⛈️'],
+  85:['Snow showers','🌨️'],86:['Snow showers','🌨️'],95:['Thunderstorm','⛈️'],96:['Thunderstorm','⛈️'],99:['Thunderstorm','⛈️']
+};
+function fmtHour(s){let d=new Date(s);let h=d.getHours();let ap=h>=12?'PM':'AM';h=h%12||12;return h+' '+ap}
+function fmtDate(){return new Intl.DateTimeFormat('en-IN',{weekday:'long',day:'numeric',month:'long',timeZone:'Asia/Kolkata'}).format(new Date())}
+function getCode(c){return codes[c]||['Weather','🌤️']}
+async function load(){
+ try{
+  const u=API+'?latitude='+LAT+'&longitude='+LON+'&timezone=Asia%2FKolkata&forecast_days=2'
+   +'&current=temperature_2m,apparent_temperature,weather_code'
+   +'&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code'
+   +'&daily=temperature_2m_max,temperature_2m_min,weather_code';
+  const r=await fetch(u,{cache:'no-store'}); const d=await r.json();
+  const cur=d.current, c=getCode(cur.weather_code);
+  let start=d.hourly.time.findIndex(t=>t>=cur.time);
+  if(start<0) start=0;
+  const hs=[];
+  for(let i=start;i<start+8 && i<d.hourly.time.length;i++){
+    const hc=getCode(d.hourly.weather_code[i]);
+    hs.push(`<div class="card"><div class="time">${i===start?'NOW':fmtHour(d.hourly.time[i])}</div><div class="ico">${hc[1]}</div><div class="ct">${Math.round(d.hourly.temperature_2m[i])}°</div><div class="rain">${Math.round(d.hourly.precipitation_probability[i])}% rain</div></div>`);
+  }
+  const todayMax=Math.round(d.daily.temperature_2m_max[0]), todayMin=Math.round(d.daily.temperature_2m_min[0]);
+  document.getElementById('app').innerHTML=`
+   <div class="top">
+    <div><div class="location">KOCHI, KERALA</div><div class="date">${fmtDate()}</div></div>
+    <div class="updated">Updated ${new Intl.DateTimeFormat('en-IN',{hour:'numeric',minute:'2-digit',timeZone:'Asia/Kolkata'}).format(new Date())}</div>
+   </div>
+   <div class="main">
+    <div class="currentIcon">${c[1]}</div>
+    <div><div><span class="temp">${Math.round(cur.temperature_2m)}</span><span class="unit">°C</span></div>
+    <div class="condition">${c[0]}</div>
+    <div class="feels">RealFeel / feels like ${Math.round(cur.apparent_temperature)}°C</div>
+    <div class="hl"><span>H ${todayMax}°</span><span>L ${todayMin}°</span></div></div>
+   </div>
+   <div class="hourly">${hs.join('')}</div>
+   <div class="footer"><span>Hourly forecast • Rain probability</span><span>Data: Open-Meteo</span></div>`;
+ }catch(e){
+   document.getElementById('loading').textContent='Weather temporarily unavailable — retrying…';
+ }
+}
+load(); setInterval(load,10*60*1000);
+document.getElementById('tap').addEventListener('click',()=>document.getElementById('tap').classList.add('hidden'));
+</script>
+
+<script>
+var AlwaysUseSilk = true
+</script>
+<script defer src="https://dagammla.gitlab.io/keep-silk-open/keep.js"></script>
+</body>
+</html>
