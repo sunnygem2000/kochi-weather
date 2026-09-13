@@ -7,7 +7,9 @@
 <style>
 *{box-sizing:border-box}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#0b1720;color:#fff;font-family:Arial,Helvetica,sans-serif}
+:fullscreen{width:100vw;height:100vh;background:#0b1720}
 body{display:flex;align-items:stretch;justify-content:center}
+body:fullscreen{display:flex}
 #app{width:100%;height:100%;padding:34px 42px 28px;display:flex;flex-direction:column}
 .top{display:flex;justify-content:space-between;align-items:flex-start}
 .location{font-size:42px;font-weight:700;letter-spacing:.5px}
@@ -29,12 +31,12 @@ body{display:flex;align-items:stretch;justify-content:center}
 .card .rain{font-size:16px;opacity:.7;margin-top:5px}
 .footer{display:flex;justify-content:space-between;align-items:center;margin-top:16px;font-size:15px;opacity:.48}
 #loading{font-size:26px;margin:auto}
-#tap{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:10}
+#tap{position:fixed;inset:0;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;z-index:10;cursor:pointer}
 #tap div{background:#fff;color:#111;border-radius:18px;padding:24px 34px;text-align:center;font-size:27px;font-weight:700}
 #tap small{display:block;font-size:16px;font-weight:400;margin-top:8px;opacity:.7}
 .hidden{display:none!important}
 @media(max-width:900px){
- #app{padding:22px}.location{font-size:30px}.date{font-size:17px}.main{gap:18px}.currentIcon{font-size:70px}.temp{font-size:80px}.condition{font-size:24px}.hourly{gap:6px}.card{padding:10px 3px}.card .time{font-size:14px}.card .ct{font-size:22px}
+ #app{padding:22px}.location{font-size:30px}.date{font-size:17px}.main{gap:18px}.currentIcon{font-size:70px}.temp{font-size:80px}.condition{font-size:24px}.weekly{width:300px}.weeklyTitle{font-size:18px}.daycard{grid-template-columns:62px 34px 1fr 65px;padding:6px 7px}.dayname{font-size:14px}.dayico{font-size:23px}.daytemp{font-size:15px}.dayrain{font-size:12px}.hourly{gap:6px}.card{padding:10px 3px}.card .time{font-size:14px}.card .ct{font-size:22px}
 }
 </style>
 </head>
@@ -60,10 +62,10 @@ function fmtDate(){return new Intl.DateTimeFormat('en-IN',{weekday:'long',day:'n
 function getCode(c){return codes[c]||['Weather','🌤️']}
 async function load(){
  try{
-  const u=API+'?latitude='+LAT+'&longitude='+LON+'&timezone=Asia%2FKolkata&forecast_days=2'
+  const u=API+'?latitude='+LAT+'&longitude='+LON+'&timezone=Asia%2FKolkata&forecast_days=7'
    +'&current=temperature_2m,apparent_temperature,weather_code'
    +'&hourly=temperature_2m,apparent_temperature,precipitation_probability,weather_code'
-   +'&daily=temperature_2m_max,temperature_2m_min,weather_code';
+   +'&daily=temperature_2m_max,temperature_2m_min,weather_code,precipitation_probability_max';
   const r=await fetch(u,{cache:'no-store'}); const d=await r.json();
   const cur=d.current, c=getCode(cur.weather_code);
   let start=d.hourly.time.findIndex(t=>t>=cur.time);
@@ -74,6 +76,16 @@ async function load(){
     hs.push(`<div class="card"><div class="time">${i===start?'NOW':fmtHour(d.hourly.time[i])}</div><div class="ico">${hc[1]}</div><div class="ct">${Math.round(d.hourly.temperature_2m[i])}°</div><div class="rain">${Math.round(d.hourly.precipitation_probability[i])}% rain</div></div>`);
   }
   const todayMax=Math.round(d.daily.temperature_2m_max[0]), todayMin=Math.round(d.daily.temperature_2m_min[0]);
+  const weekly=[];
+  for(let j=0;j<7 && j<d.daily.time.length;j++){
+    const dd=new Date(d.daily.time[j]+'T12:00:00+05:30');
+    const day=j===0?'Today':new Intl.DateTimeFormat('en-IN',{weekday:'short',timeZone:'Asia/Kolkata'}).format(dd);
+    const wc=getCode(d.daily.weather_code[j]);
+    const mx=Math.round(d.daily.temperature_2m_max[j]);
+    const mn=Math.round(d.daily.temperature_2m_min[j]);
+    const rp=Math.round(d.daily.precipitation_probability_max[j] ?? 0);
+    weekly.push(`<div class="daycard"><div class="dayname">${day}</div><div class="dayico">${wc[1]}</div><div class="daytemp">${mx}° / ${mn}°</div><div class="dayrain">${rp}% rain</div></div>`);
+  }
   document.getElementById('app').innerHTML=`
    <div class="top">
     <div><div class="location">KOCHI, KERALA</div><div class="date">${fmtDate()}</div></div>
@@ -85,15 +97,21 @@ async function load(){
     <div class="condition">${c[0]}</div>
     <div class="feels">RealFeel / feels like ${Math.round(cur.apparent_temperature)}°C</div>
     <div class="hl"><span>H ${todayMax}°</span><span>L ${todayMin}°</span></div></div>
+    <div class="weekly"><div class="weeklyTitle">7-DAY FORECAST</div><div class="weeklyGrid">${weekly.join('')}</div></div>
    </div>
    <div class="hourly">${hs.join('')}</div>
-   <div class="footer"><span>Hourly forecast • Rain probability</span><span>Data: Open-Meteo</span></div>`;
+   <div class="footer"><span>Hourly forecast • Rain probability • Updates every 10 min</span><span>Data: Open-Meteo</span></div>`;
  }catch(e){
    document.getElementById('loading').textContent='Weather temporarily unavailable — retrying…';
  }
 }
 load(); setInterval(load,10*60*1000);
-document.getElementById('tap').addEventListener('click',()=>document.getElementById('tap').classList.add('hidden'));
+document.getElementById('tap').addEventListener('click', async ()=>{
+  document.getElementById('tap').classList.add('hidden');
+  try{
+    if (document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+  }catch(e){}
+});
 </script>
 
 <script>
